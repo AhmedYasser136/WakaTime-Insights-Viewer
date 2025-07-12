@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>WakaTime – Insights Viewer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --accent: #00e676;
+      --text: #c9d1d9;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+
+    select {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 15px;
+      margin-left: 8px;
+    }
+
+    #report h2 {
+      margin: 32px 0 12px;
+      color: var(--accent);
+      font-size: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    th {
+      background: #1f242d;
+      cursor: pointer;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>WakaTime – Insights Viewer</h1>
+  <label for="groupSelect">Group by:</label>
+  <select id="groupSelect">
+    <option value="project">Project</option>
+    <option value="date">Date</option>
+    <option value="language">Language</option>
+    <option value="editor">Editor</option>
+    <option value="os">OS</option>
+    <option value="entity">Entity</option>
+  </select>
+
+  <input type="text" id="searchBox" placeholder="Search..." style="
+        margin-left: 10px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font-size: 15px;
+      " />
+  <input type="file" id="fileInput" accept=".json" style="
+        margin-left: 10px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font-size: 15px;
+      " />
+
+  <div id="report"></div>
+
+  <script>
+    function formatTime(seconds) {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = Math.round(seconds % 60);
+      if (hrs)
+        return `${hrs} hr${hrs > 1 ? "s" : ""} ${mins} min${mins !== 1 ? "s" : ""
+          }`;
+      if (mins) return `${mins} min${mins !== 1 ? "s" : ""}`;
+      return `${secs} sec${secs !== 1 ? "s" : ""}`;
+    }
+
+    function clearAndTitle(title) {
+      const container = document.getElementById("report");
+      container.innerHTML = `<h2>${title}</h2>`;
+      return container;
+    }
+
+    function renderTable(dataMap, label1, label2) {
+      const rows = Object.entries(dataMap);
+      let ascending = false;
+
+      function drawTable(sortedRows) {
+        let html = `<table><thead><tr>
+          <th id="col1">${label1}</th>
+          <th id="col2">${label2}</th>
+        </tr></thead><tbody>`;
+        sortedRows.forEach(([key, val]) => {
+          html += `<tr><td>${key}</td><td>${formatTime(val)}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+        document.getElementById("report").innerHTML += html;
+
+        document.getElementById("col1").onclick = () => {
+          const sorted = [...rows].sort((a, b) =>
+            ascending ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])
+          );
+          ascending = !ascending;
+          document.getElementById(
+            "report"
+          ).innerHTML = `<h2>${label1} Sorted</h2>`;
+          drawTable(sorted);
+        };
+
+        document.getElementById("col2").onclick = () => {
+          const sorted = [...rows].sort((a, b) =>
+            ascending ? a[1] - b[1] : b[1] - a[1]
+          );
+          ascending = !ascending;
+          document.getElementById(
+            "report"
+          ).innerHTML = `<h2>${label2} Sorted</h2>`;
+          drawTable(sorted);
+        };
+      }
+
+      drawTable(rows.sort((a, b) => b[1] - a[1]));
+    }
+
+    function renderByProject(data) {
+      const container = clearAndTitle("Grouped by Project");
+      const projects = {};
+      data.days.forEach((day) => {
+        (day.projects || []).forEach((p) => {
+          const name = p.name || "Unknown";
+          if (!projects[name]) projects[name] = 0;
+          projects[name] += p.grand_total?.total_seconds || 0;
+        });
+      });
+      renderTable(projects, "Project", "Time Spent");
+    }
+
+    function renderByDate(data) {
+      const container = clearAndTitle("Grouped by Date");
+      const dates = {};
+      data.days.forEach((day) => {
+        const date = day.date;
+        dates[date] = day.grand_total?.total_seconds || 0;
+      });
+      renderTable(dates, "Date", "Time Spent");
+    }
+
+    function renderByLanguage(data) {
+      const container = clearAndTitle("Grouped by Language");
+      const langs = {};
+      data.days.forEach((day) => {
+        (day.languages || []).forEach((lang) => {
+          if (!langs[lang.name]) langs[lang.name] = 0;
+          langs[lang.name] += lang.total_seconds;
+        });
+      });
+      renderTable(langs, "Language", "Time Spent");
+    }
+
+    function renderByEditor(data) {
+      const container = clearAndTitle("Grouped by Editor");
+      const editors = {};
+      data.days.forEach((day) => {
+        (day.editors || []).forEach((editor) => {
+          if (!editors[editor.name]) editors[editor.name] = 0;
+          editors[editor.name] += editor.total_seconds;
+        });
+      });
+      renderTable(editors, "Editor", "Time Spent");
+    }
+
+    function renderByOS(data) {
+      const container = clearAndTitle("Grouped by Operating System");
+      const os = {};
+      data.days.forEach((day) => {
+        (day.operating_systems || []).forEach((system) => {
+          if (!os[system.name]) os[system.name] = 0;
+          os[system.name] += system.total_seconds;
+        });
+      });
+      renderTable(os, "OS", "Time Spent");
+    }
+
+    function renderByEntity(data) {
+      const container = clearAndTitle("Grouped by File/Domain");
+      const entities = {};
+      data.days.forEach((day) => {
+        (day.projects || []).forEach((p) => {
+          (p.entities || []).forEach((entity) => {
+            const name = entity.name || "Unnamed";
+            if (!entities[name]) entities[name] = 0;
+            entities[name] += entity.total_seconds;
+          });
+        });
+      });
+      renderTable(entities, "Entity", "Time Spent");
+    }
+
+    const renderMap = {
+      project: renderByProject,
+      date: renderByDate,
+      language: renderByLanguage,
+      editor: renderByEditor,
+      os: renderByOS,
+      entity: renderByEntity,
+    };
+
+    document.getElementById('fileInput').addEventListener('change', function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          const select = document.getElementById("groupSelect");
+
+          renderMap[select.value](data); // عرض البيانات الأولية
+
+          // إعادة العرض عند تغيير نوع التصنيف
+          select.onchange = (e) => renderMap[e.target.value](data);
+        } catch (err) {
+          document.getElementById("report").innerText = "❌ Failed to parse JSON file.";
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+
+    function renderTable(dataMap, label1, label2) {
+      const rows = Object.entries(dataMap);
+      let ascending = false;
+      let currentRows = [...rows]; // لحفظ الحالة الحالية
+
+      function drawTable(filteredRows) {
+        let total = filteredRows.reduce((sum, [, val]) => sum + val, 0); // احسب الوقت الكلي
+
+        let html = `<table><thead><tr>
+    <th id="col1">${label1}</th>
+    <th id="col2">${label2}</th>
+  </tr></thead><tbody>`;
+
+        filteredRows.forEach(([key, val]) => {
+          html += `<tr><td>${key}</td><td>${formatTime(val)}</td></tr>`;
+        });
+
+        // أضف سطر الوقت الكلي
+        html += `<tr><td><strong>Total</strong></td><td><strong>${formatTime(
+          total
+        )}</strong></td></tr>`;
+        html += `</tbody></table>`;
+
+        document.getElementById("report").innerHTML += html;
+
+        // إعادة الترتيب بالضغط على العناوين
+        document.getElementById("col1").onclick = () => {
+          const sorted = [...currentRows].sort((a, b) =>
+            ascending ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])
+          );
+          ascending = !ascending;
+          document.getElementById(
+            "report"
+          ).innerHTML = `<h2>${label1} Sorted</h2>`;
+          currentRows = sorted;
+          drawTable(sorted);
+        };
+
+        document.getElementById("col2").onclick = () => {
+          const sorted = [...currentRows].sort((a, b) =>
+            ascending ? a[1] - b[1] : b[1] - a[1]
+          );
+          ascending = !ascending;
+          document.getElementById(
+            "report"
+          ).innerHTML = `<h2>${label2} Sorted</h2>`;
+          currentRows = sorted;
+          drawTable(sorted);
+        };
+      }
+
+      // Search logic
+      const searchInput = document.getElementById("searchBox");
+      searchInput.oninput = () => {
+        const q = searchInput.value.toLowerCase();
+        const filtered = currentRows.filter(([k, _]) =>
+          k.toLowerCase().includes(q)
+        );
+        document.getElementById(
+          "report"
+        ).innerHTML = `<h2>Filtered by '${q}'</h2>`;
+        drawTable(filtered);
+      };
+
+      currentRows = rows.sort((a, b) => b[1] - a[1]);
+      drawTable(currentRows);
+    }
+  </script>
+</body>
+
+</html>
