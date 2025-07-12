@@ -287,7 +287,7 @@
       let currentRows = [...rows]; // لحفظ الحالة الحالية
 
       function drawTable(filteredRows) {
-        let total = filteredRows.reduce((sum, [, val]) => sum + val, 0); // احسب الوقت الكلي
+        let total = filteredRows.reduce((sum, [, val]) => sum + val, 0); 
 
         let html = `<table><thead><tr>
     <th id="col1">${label1}</th>
